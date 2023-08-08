@@ -3,6 +3,9 @@ import sys
 import subprocess
 import re
 import threading
+import cv2
+import psutil
+import numpy as np
 from torchvision import transforms
 from PIL import Image
 
@@ -21,6 +24,42 @@ def preprocess_img(filename):
     input_tensor = preprocess(input_image)
     return input_tensor.numpy()
 
+
+def center_crop(img, out_height, out_width):
+    height, width, _ = img.shape
+    left = int((width - out_width) / 2)
+    right = int((width + out_width) / 2)
+    top = int((height - out_height) / 2)
+    bottom = int((height + out_height) / 2)
+    img = img[top:bottom, left:right]
+    return img
+
+
+def resize_with_aspectratio(img, out_height, out_width, scale=87.5, inter_pol=cv2.INTER_LINEAR):
+    height, width, _ = img.shape
+    new_height = int(100. * out_height / scale)
+    new_width = int(100. * out_width / scale)
+    if height > width:
+        w = new_width
+        h = int(new_height * height / width)
+    else:
+        h = new_height
+        w = int(new_width * width / height)
+    img = cv2.resize(img, (w, h), interpolation=inter_pol)
+    return img
+
+def pre_process_tflite(img, dims=None, need_transpose=False):
+    img = cv2.imread(img)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = resize_with_aspectratio(img, 224, 224, inter_pol=cv2.INTER_LINEAR)
+    img = center_crop(img, 224, 224)
+    img = np.asarray(img, dtype='float32')
+   
+    img = img[..., ::-1]
+    means = np.array([103.939, 116.779, 123.68], dtype=np.float32)
+    img -= means
+    return img
+    
 
 def extract_tegrastats_info(output):
     # e.g. RAM 1542/1980MB
@@ -123,3 +162,11 @@ def build_and_run_device_query():
             return "Device not found in the output."
     except FileNotFoundError:
         return "deviceQuery or make command not found in the specified CUDA directory."
+
+
+def get_psutil_stats(output_queue, stop_event):
+    while not stop_event.is_set():
+        cpu_usage = psutil.cpu_percent()
+        ram_usage = psutil.virtual_memory()[3] / (1024*1024)
+        output_queue.put((cpu_usage, ram_usage)) 
+

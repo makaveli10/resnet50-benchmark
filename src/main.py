@@ -4,7 +4,6 @@ from tqdm import tqdm
 import os
 import numpy as np
 import time
-from backend.tensorrt import Resnet50TRT
 
 
 def main(args):
@@ -21,8 +20,10 @@ def main(args):
         npy_path = os.path.join(args.preprocessed_dir, filename.replace("JPEG", "npy"))
         if os.path.exists(npy_path):
             continue
-        
-        preprocessed = utils.preprocess_img(jpeg_path)
+        if args.backend == "tflite":
+            preprocessed = utils.pre_process_tflite(jpeg_path)
+        else:    
+            preprocessed = utils.preprocess_img(jpeg_path)
         np.save(npy_path, preprocessed)
     
     # load val_map
@@ -36,27 +37,36 @@ def main(args):
     accuracy = []
 
     model = None
+    data = None
     if args.backend == "tensorrt":
-        model = Resnet50TRT(args.engine_path)
+        from backend.tensorrt import Resnet50TRT
+
+        model = Resnet50TRT(args.model_path)
+        data = np.ones((1 * 3 * 224 * 224), dtype=np.float32)
+    
+    if args.backend == "tflite":
+        from backend.tflite import Resnet50Tflite
+        print(args.model_path)
+        model = Resnet50Tflite(args.model_path)
+        data = np.ones((224, 224, 3), dtype=np.float32)
 
     if model is None:
         print("model is none")
         return
 
     # warmup
-    data = np.ones((1 * 3 * 224 * 224), dtype=np.float32)
     model.warmup(data)
 
     model.capture_stats()
 
-    npy_arrays = os.listdir(args.preprocessed_dir)[:50]
+    npy_arrays = os.listdir(args.preprocessed_dir)
 
     for npy_arr in tqdm(npy_arrays,  desc="Running inference"):
         inputs = np.load(os.path.join(args.preprocessed_dir, npy_arr))
         start = time.time()
         outputs = model(inputs)
         t = time.time() - start   
-        times.append(t)     
+        times.append(t)
         pred = model.get_pred(outputs)
         gt = labels[npy_arr.split('.')[0]]
         if pred==gt:
@@ -87,7 +97,7 @@ def main(args):
     data_dict["cpu"] = float(cpu_util)
     data_dict["memory"] = int(ram_usage)
     data_dict["power"] = ""
-    data_dict["temperature"] = float(temp)
+    data_dict["temperature"] = "" if temp is None else float(temp)
     print(data_dict)
         
 if __name__ == '__main__':
@@ -111,10 +121,10 @@ if __name__ == '__main__':
         help="backend name"
     )
     parser.add_argument(
-        "--engine-path",
+        "--model_path",
         default="/mnt/workspace/tensorrtx/resnet/build/resnet50_fp16.engine",
         type=str,
-        help="tensorrt engine path"
+        help="model path"
     )
     args = parser.parse_args()
     main(args)
