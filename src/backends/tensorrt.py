@@ -14,17 +14,31 @@ from tqdm import tqdm
 from queue import Queue
 
 import utils
+from backends.backend import Backend
 
 
-
-class Resnet50TRT:
-    """Resnet50 TensorRT inference utility class.
+class TRTBackend(Backend):
+    """TensorRT inference utility class.
     """
-    def __init__(self, engine_path, precision=None):
+    def __init__(self, name, precision=None):
         """Initialize.
         """
-        self.model_name = "resnet50"
+        super(TRTBackend, self).__init__(name)
         self.precision = "fp32" if precision is None else precision
+    
+    def name(self):
+        return self.name
+    
+    def version(self):
+        return trt.__version__
+    
+    def warmup(self, inputs, warmup_steps=100):
+        for step in range(warmup_steps):
+            self(inputs)
+        
+    def load_backend(self, model_path, model_name):
+        self.model_name = model_name
+
         # Create a Context on this device,
         self._ctx = cuda.Device(0).make_context()
         self._logger = trt.Logger(trt.Logger.INFO)
@@ -37,7 +51,7 @@ class Resnet50TRT:
         self._outputs = None
         self._bindings = None
 
-        self._load_model(engine_path)
+        self._load_model(model_path)
         self._allocate_buffers()
 
     def _deserialize_engine(self, trt_engine_path: str) -> trt.tensorrt.ICudaEngine:
@@ -132,17 +146,20 @@ class Resnet50TRT:
             self._ctx.pop()
         except Exception as exception:
             pass
-
-    def warmup(self, inputs, warmup_steps=100):
-        for step in range(warmup_steps):
-            self(inputs)
     
     def capture_stats(self):
         self.stop_event = threading.Event()
         self.output_queue = Queue()
-        self.process = subprocess.Popen(['tegrastats'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.process = subprocess.Popen(
+            ['tegrastats'], 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE
+        )
         self.tegrastats_thread = threading.Thread(
-            target=utils.read_tegrastats_output, args=(self.process, self.output_queue, self.stop_event), daemon=True)
+            target=utils.read_tegrastats_output,
+            args=(self.process, self.output_queue, self.stop_event),
+            daemon=True
+        )
         self.tegrastats_thread.start()
     
     def get_avg_stats(self):

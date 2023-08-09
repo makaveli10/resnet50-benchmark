@@ -11,7 +11,7 @@ def main(args):
     os.makedirs(args.preprocessed_dir, exist_ok=True)
 
     # preprocess and save np array
-    jpeg_files_list = os.listdir(args.imagenet)[:50]
+    jpeg_files_list = os.listdir(args.imagenet)
     
     for filename in tqdm(jpeg_files_list, desc="Preprocessing", unit="image"):
         if not filename.lower().endswith('.jpeg'):
@@ -39,9 +39,9 @@ def main(args):
     backend = None
     data = None
     if args.backend == "tensorrt":
-        from backend.tensorrt import Resnet50TRT
-
-        backend = Resnet50TRT(args.model_path)
+        from backends.tensorrt import TRTBackend
+        precision = "fp16" if "fp16" in args.model_path else "fp32"
+        backend = TRTBackend(name="tensorrt", precision=precision)
         data = np.ones((1 * 3 * 224 * 224), dtype=np.float32)
     
     if args.backend == "tflite":
@@ -53,19 +53,20 @@ def main(args):
     if args.backend == "ncnn":
         from backends.ncnn import NCNNBackend
         backend = NCNNBackend()
-        backend.load_backend(args.model_path)
         data = np.ones((1, 3, 224, 224), dtype=np.float32)
 
     if backend is None:
         print("backend is none")
         return
-
-    # warmup
+    
+    backend.load_backend(args.model_path, model_name=args.model_name)
     backend.warmup(data)
 
     backend.capture_stats()
 
     npy_arrays = os.listdir(args.preprocessed_dir)
+    if args.count is not None:
+        npy_arrays = npy_arrays[:args.count]
 
     for npy_arr in tqdm(npy_arrays,  desc="Running inference"):
         inputs = np.load(os.path.join(args.preprocessed_dir, npy_arr))
@@ -116,7 +117,7 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "--preprocessed-dir",
-        default="/mnt/workspace/imagenet_preprocessed_ncnn",
+        default="/mnt/workspace/imagenet_preprocessed",
         type=str,
         help="directory to store preprocessed np array"
     )
@@ -127,10 +128,22 @@ if __name__ == '__main__':
         help="backend name"
     )
     parser.add_argument(
+        "--model-name",
+        default="resnet50",
+        type=str,
+        help="model name"
+    )
+    parser.add_argument(
         "--model_path",
         default="/mnt/workspace/CM/repos/local/cache/dc84a916f80f41d1/resnet50_v1",
         type=str,
         help="model path"
+    )
+    parser.add_argument(
+        "--count",
+        default=None,
+        type=int,
+        help="no of images to run benchmark on"
     )
     args = parser.parse_args()
     main(args)
