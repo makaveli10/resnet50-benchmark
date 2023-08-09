@@ -4,7 +4,6 @@ from tqdm import tqdm
 import os
 import numpy as np
 import time
-from backend.tensorrt import Resnet50TRT
 
 
 def main(args):
@@ -12,7 +11,7 @@ def main(args):
     os.makedirs(args.preprocessed_dir, exist_ok=True)
 
     # preprocess and save np array
-    jpeg_files_list = os.listdir(args.imagenet)
+    jpeg_files_list = os.listdir(args.imagenet)[:50]
     
     for filename in tqdm(jpeg_files_list, desc="Preprocessing", unit="image"):
         if not filename.lower().endswith('.jpeg'):
@@ -35,37 +34,44 @@ def main(args):
     times = []
     accuracy = []
 
-    model = None
+    backend = None
     if args.backend == "tensorrt":
-        model = Resnet50TRT(args.engine_path)
+        from backends.tensorrt import Resnet50TRT
+        backend = Resnet50TRT(args.model_path)
+        data = np.ones((1 * 3 * 224 * 224), dtype=np.float32)
+    elif args.backend == "ncnn":
+        from backends.ncnn import NCNNBackend
+        backend = NCNNBackend()
+        backend.load_backend(args.model_path)
+        data = np.ones((1,3,224,224), dtype=np.float32)
 
-    if model is None:
-        print("model is none")
+    if backend is None:
+        print("backend is none")
         return
 
     # warmup
-    data = np.ones((1 * 3 * 224 * 224), dtype=np.float32)
-    model.warmup(data)
+    
+    backend.warmup(data)
 
-    model.capture_stats()
+    backend.capture_stats()
 
     npy_arrays = os.listdir(args.preprocessed_dir)[:50]
 
     for npy_arr in tqdm(npy_arrays,  desc="Running inference"):
         inputs = np.load(os.path.join(args.preprocessed_dir, npy_arr))
         start = time.time()
-        outputs = model(inputs)
+        outputs = backend(inputs)
         t = time.time() - start   
         times.append(t)     
-        pred = model.get_pred(outputs)
+        pred = backend.get_pred(outputs)
         gt = labels[npy_arr.split('.')[0]]
         if pred==gt:
             accuracy.append(1)
         else:
             accuracy.append(0)
     
-    model.stop_event.set()
-    model.destroy()
+    backend.stop_event.set()
+    backend.destroy()
 
     np_acc = np.array(accuracy)
     np_lat = np.array(times)
@@ -94,13 +100,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--imagenet",
-        default='/mnt/val',
+        default='/mnt/workspace/imagenet-2012/val',
         type=str,
         help="directory with imagenet images"
     )
     parser.add_argument(
         "--preprocessed-dir",
-        default="/mnt/workspace/imagenet_preprocessed",
+        default="/mnt/workspace/imagenet_preprocessed_ncnn",
         type=str,
         help="directory to store preprocessed np array"
     )
@@ -111,8 +117,8 @@ if __name__ == '__main__':
         help="backend name"
     )
     parser.add_argument(
-        "--engine-path",
-        default="/mnt/workspace/tensorrtx/resnet/build/resnet50_fp16.engine",
+        "--model-path",
+        default="/mnt/workspace/CM/repos/local/cache/dc84a916f80f41d1/resnet50_v1",
         type=str,
         help="tensorrt engine path"
     )
