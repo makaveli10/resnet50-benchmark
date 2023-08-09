@@ -7,7 +7,6 @@ from pycoral.utils.edgetpu import make_interpreter
 import utils
 
 
-
 class Resnet50Tflite:
     def __init__(self, model_path):
         self.model_name = "resnet50"
