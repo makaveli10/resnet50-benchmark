@@ -20,8 +20,10 @@ def main(args):
         npy_path = os.path.join(args.preprocessed_dir, filename.replace("JPEG", "npy"))
         if os.path.exists(npy_path):
             continue
-        
-        preprocessed = utils.preprocess_img(jpeg_path)
+        if args.backend == "tflite":
+            preprocessed = utils.pre_process_tflite(jpeg_path)
+        else:
+            preprocessed = utils.preprocess_img(jpeg_path)
         np.save(npy_path, preprocessed)
     
     # load val_map
@@ -35,34 +37,42 @@ def main(args):
     accuracy = []
 
     backend = None
+    data = None
     if args.backend == "tensorrt":
-        from backends.tensorrt import Resnet50TRT
+        from backend.tensorrt import Resnet50TRT
+
         backend = Resnet50TRT(args.model_path)
         data = np.ones((1 * 3 * 224 * 224), dtype=np.float32)
-    elif args.backend == "ncnn":
+    
+    if args.backend == "tflite":
+        from backend.tflite import Resnet50Tflite
+        print(args.model_path)
+        backend = Resnet50Tflite(args.model_path)
+        data = np.ones((224, 224, 3), dtype=np.float32)
+    
+    if args.backend == "ncnn":
         from backends.ncnn import NCNNBackend
         backend = NCNNBackend()
         backend.load_backend(args.model_path)
-        data = np.ones((1,3,224,224), dtype=np.float32)
+        data = np.ones((1, 3, 224, 224), dtype=np.float32)
 
     if backend is None:
         print("backend is none")
         return
 
     # warmup
-    
     backend.warmup(data)
 
     backend.capture_stats()
 
-    npy_arrays = os.listdir(args.preprocessed_dir)[:50]
+    npy_arrays = os.listdir(args.preprocessed_dir)
 
     for npy_arr in tqdm(npy_arrays,  desc="Running inference"):
         inputs = np.load(os.path.join(args.preprocessed_dir, npy_arr))
         start = time.time()
         outputs = backend(inputs)
         t = time.time() - start   
-        times.append(t)     
+        times.append(t)
         pred = backend.get_pred(outputs)
         gt = labels[npy_arr.split('.')[0]]
         if pred==gt:
@@ -78,22 +88,22 @@ def main(args):
     print(f"Accuracy = {np.count_nonzero(np_acc == 1)/len(np_acc)}")
     print(f"Latency = {np.sum(np_lat)/len(np_lat)}") 
       
-    ram_usage, cpu_util, gpu_util, temp = model.get_avg_stats()
+    ram_usage, cpu_util, gpu_util, temp = backend.get_avg_stats()
     print(ram_usage, cpu_util, gpu_util, temp)
 
     data_dict = {}
     data_dict["system"] = utils.get_device_model()
     data_dict["processor"] = utils.get_cpu()
     data_dict["accelerator"] = utils.build_and_run_device_query() if args.backend in ["tensorrt"] else ""
-    data_dict["model_name"] = model.model_name
+    data_dict["model_name"] = backend.model_name
     data_dict["framework"] = f"{args.backend}"
     data_dict["latency"] = round(float(np.sum(np_lat)/len(np_lat))*1000, 3)
-    data_dict["precision"] = model.precision
+    data_dict["precision"] = backend.precision
     data_dict["accuracy"] = round(float(np.count_nonzero(np_acc == 1)/len(np_acc))*100, 3)
     data_dict["cpu"] = float(cpu_util)
     data_dict["memory"] = int(ram_usage)
     data_dict["power"] = ""
-    data_dict["temperature"] = float(temp)
+    data_dict["temperature"] = "" if temp is None else float(temp)
     print(data_dict)
         
 if __name__ == '__main__':
@@ -117,10 +127,10 @@ if __name__ == '__main__':
         help="backend name"
     )
     parser.add_argument(
-        "--model-path",
+        "--model_path",
         default="/mnt/workspace/CM/repos/local/cache/dc84a916f80f41d1/resnet50_v1",
         type=str,
-        help="tensorrt engine path"
+        help="model path"
     )
     args = parser.parse_args()
     main(args)
