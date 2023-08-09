@@ -24,7 +24,7 @@ class NCNNBackend(Backend):
         for i in range(warmup_steps):
             self(data)
 
-    def load_backend(self, model_path, inputs=None, outputs=None):
+    def load_backend(self, model_path, model_name=None, inputs=None, outputs=None):
         param_file, bin_file = f"{model_path}.param", f"{model_path}.bin"
         if param_file.endswith("resnet50_v1.param"):
             # download model files if doesn't
