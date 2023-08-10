@@ -5,12 +5,23 @@ from pycoral.adapters import common, classify
 from pycoral.utils.edgetpu import make_interpreter
 
 import utils
+from backends.backend import Backend
 
 
-class Resnet50Tflite:
-    def __init__(self, model_path):
-        self.model_name = "resnet50"
-        self.precision = "int8"
+class TfliteBackend(Backend):
+    def __init__(self, name, device="tpu"):
+        super(TfliteBackend, self).__init__(name)
+        self.precision = "int8" if device=="tpu" else "fp32"
+    
+    def name(self):
+        return self.name
+    
+    def version(self):
+        import tflite_runtime
+        return tflite_runtime.__version__
+
+    def load_backend(self, model_path, model_name=None):
+        self.model_name = model_name
         self.interpreter = make_interpreter(model_path)
         self.interpreter.allocate_tensors()
         # keep input/output name to index mapping

@@ -45,9 +45,8 @@ def main(args):
         data = np.ones((1 * 3 * 224 * 224), dtype=np.float32)
     
     if args.backend == "tflite":
-        from backend.tflite import Resnet50Tflite
-        print(args.model_path)
-        backend = Resnet50Tflite(args.model_path)
+        from backends.tflite import TfliteBackend
+        backend = TfliteBackend(name="tflite")
         data = np.ones((224, 224, 3), dtype=np.float32)
     
     if args.backend == "ncnn":
