@@ -63,9 +63,7 @@ class NCNNBackend(Backend):
             ram_usage.append(r)
             cpu_util.append(c)
         ram_usage, cpu_util = np.array(ram_usage), np.array(cpu_util)
-        avg_ram, avg_cpu = np.sum(ram_usage) / len(ram_usage), \
-            np.sum(cpu_util) / len(cpu_util)
-        return round(avg_ram, 3), round(avg_cpu, 3), None, None
+        return ram_usage, cpu_util, None, None
     
     def get_pred(self, outputs):
         return outputs.argmax()

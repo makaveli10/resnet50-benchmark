@@ -9,6 +9,8 @@ import numpy as np
 from torchvision import transforms
 from PIL import Image
 
+import sensors
+
 
 
 def preprocess_img(filename):
@@ -166,7 +168,6 @@ def build_and_run_device_query():
 
 def get_psutil_stats(output_queue, stop_event):
     while not stop_event.is_set():
-        cpu_usage = psutil.cpu_percent()
-        ram_usage = psutil.virtual_memory()[3] / (1024*1024)
-        output_queue.put((cpu_usage, ram_usage)) 
-
+        cpu_usage = sensors.handle_coral_dev_board_cpu_usage()
+        ram_usage = sensors.handle_coral_dev_board_memory_usage()
+        output_queue.put((cpu_usage, ram_usage))
