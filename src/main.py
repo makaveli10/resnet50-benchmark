@@ -4,6 +4,7 @@ from tqdm import tqdm
 import os
 import numpy as np
 import time
+import requests
 
 
 def main(args):
@@ -67,6 +68,7 @@ def main(args):
     if args.count is not None:
         npy_arrays = npy_arrays[:args.count]
 
+    print(f"start time---- {time.localtime()}")
     for npy_arr in tqdm(npy_arrays,  desc="Running inference"):
         inputs = np.load(os.path.join(args.preprocessed_dir, npy_arr))
         start = time.time()
@@ -79,6 +81,7 @@ def main(args):
             accuracy.append(1)
         else:
             accuracy.append(0)
+    print(f"end time---- {time.localtime()}")
     
     backend.stop_event.set()
     backend.destroy()
@@ -99,21 +102,30 @@ def main(args):
     data_dict["latency"] = round(float(np.sum(np_lat)/len(np_lat))*1000, 3)
     data_dict["precision"] = backend.precision
     data_dict["accuracy"] = round(float(np.count_nonzero(np_acc == 1)/len(np_acc))*100, 3)
-    data_dict["cpu"] = float(round(stats["cpu"], 2)) if "cpu" in stats else ""
-    data_dict["memory"] = float(round(stats["memory"], 2)) if "memory" in stats else ""
+    data_dict["cpu"] = float(round(np.average(stats["cpu"]), 2)) if "cpu" in stats else ""
+    data_dict["memory"] = float(round(np.average(stats["memory"]), 2)) if "memory" in stats else ""
     data_dict["power"] = ""
-    data_dict["temperature"] = float(round(stats["temperature"], 2)) if "temperature" in stats else ""
+    data_dict["temperature"] = float(round(np.average(stats["temperature"]), 2)) if "temperature" in stats else ""
     print(data_dict)
 
     # TODO: send data dict to db
+    post(data_dict)
+    # Write the dictionary to the JSON file
+    import json
+    with open("/mnt/workspace/results.json", 'w') as json_file:
+        json.dump(data_dict, json_file)
 
     # TODO: send cpu_util(has percentage usage per core for the whole run)
-    print(stats["cpu_freq"])
+
 
     # TODO: send ram_usage(has ram usage in MB for the whole run)
-    
 
-        
+
+def post(data, url="http://transcription.kurg.org:27017/bench/insert"):
+    response = requests.post(url, json=data)
+    print(response)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -142,7 +154,7 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "--model_path",
-        default=None,
+        default="/mnt/workspace/resnet50-benchmark/resnet50_quant_full_edgetpu.tflite",
         type=str,
         help="model path"
     )

@@ -65,11 +65,12 @@ class NCNNBackend(Backend):
             temp.append(t)
             cpu_freq.append(cf)
         ram_usage, cpu_util, temp = np.array(ram_usage), np.array(cpu_util), np.array(temp)
-        stats = {}
-        stats["cpu"] = np.average(cpu_util)
-        stats["memory"] = np.average(ram_usage)
-        stats["temperature"] = np.average(temp)
-        stats["cpu_freq"] = cpu_freq
+        stats = {
+            "cpu": cpu_util,
+            "memory": ram_usage,
+            "temperature": temp,
+            "cpu_freq": cpu_freq
+        }
         return stats
     
     def get_pred(self, outputs):

@@ -166,11 +166,14 @@ def build_and_run_device_query():
         return "deviceQuery or make command not found in the specified CUDA directory."
 
 
-def get_psutil_stats(output_queue, stop_event):
+def get_coral_stats(output_queue, stop_event):
     while not stop_event.is_set():
-        cpu_usage = sensors.handle_coral_dev_board_cpu_usage()
-        ram_usage = sensors.handle_coral_dev_board_memory_usage()
-        output_queue.put((cpu_usage, ram_usage))
+        tpu_freq = sensors.handle_coral_dev_board_tpu_freq()[0]
+        cpu_freq = sensors.handle_coral_dev_board_cpu_freq()
+        temp = sensors.handle_coral_dev_board_temp()
+        cpu_usage = sensors.get_cpu_usage()
+        ram_usage = sensors.get_memory_usage()
+        output_queue.put((cpu_usage, ram_usage, temp, tpu_freq, cpu_freq))
     
 
 def get_stats_rockpi(output_queue, stop_event):

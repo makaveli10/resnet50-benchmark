@@ -47,18 +47,29 @@ class TfliteBackend(Backend):
         self.stop_event = threading.Event()
         self.output_queue = Queue()
         self.psutil_thread = threading.Thread(
-            target=utils.get_psutil_stats, args=(self.output_queue, self.stop_event), daemon=True)
+            target=utils.get_coral_stats, args=(self.output_queue, self.stop_event), daemon=True
+        )
         self.psutil_thread.start()
     
     def get_avg_stats(self):
-        ram_usage, cpu_util, gpu_util, temp = [], [], [], []
+        ram_usage, cpu_util, temp, tpu_freq, cpu_freq = [], [], [], [], []
         
         while not self.output_queue.empty():
-            c,r = self.output_queue.get()
+            c,r,t, tf, cf = self.output_queue.get()
             ram_usage.append(r)
             cpu_util.append(c)
-        ram_usage, cpu_util = np.array(ram_usage), np.array(cpu_util)
-        return ram_usage, cpu_util, None, None
+            temp.append(t)
+            tpu_freq.append(tf)
+            cpu_freq.append(cf)
+        ram_usage, cpu_util, temp = np.array(ram_usage), np.array(cpu_util), np.array(temp)
+        stats = {
+            "cpu": cpu_util,
+            "memory": ram_usage,
+            "temperature": temp,
+            "tpu_freq": tpu_freq,
+            "cpu_freq": cpu_freq
+        }
+        return stats
     
     def get_pred(self, outputs):
         return outputs[0].id

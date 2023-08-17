@@ -12,7 +12,7 @@ def handle_coral_dev_board_temp():
 
 def handle_coral_dev_board_tpu_freq():
 
-    current_temp = handle_coral_dev_board_temp()
+    current_temp = handle_coral_dev_board_temp()[0]
 
     with open(r"/sys/class/apex/apex_0/trip_point0_temp") as f:
         trip_point2_temp = float(f.readline())
@@ -90,14 +90,6 @@ def get_cpu_usage():
 
 
 def get_memory_usage():
-    return [psutil.virtual_memory()[3] / (1024*1024)]
-
-
-def handle_coral_dev_board_cpu_usage():
-    return psutil.cpu_percent(interval=1, percpu=True)
-
-
-def handle_coral_dev_board_memory_usage():
     return [psutil.virtual_memory()[3] / (1024*1024)]
 
 
