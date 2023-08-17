@@ -88,7 +88,7 @@ def main(args):
     print(f"Accuracy = {np.count_nonzero(np_acc == 1)/len(np_acc)}")
     print(f"Latency = {np.sum(np_lat)/len(np_lat)}") 
       
-    ram_usage, cpu_util, gpu_util, temp = backend.get_avg_stats()
+    stats = backend.get_avg_stats()
 
     data_dict = {}
     data_dict["system"] = utils.get_device_model()
@@ -99,15 +99,16 @@ def main(args):
     data_dict["latency"] = round(float(np.sum(np_lat)/len(np_lat))*1000, 3)
     data_dict["precision"] = backend.precision
     data_dict["accuracy"] = round(float(np.count_nonzero(np_acc == 1)/len(np_acc))*100, 3)
-    data_dict["cpu"] = float(round(np.average(cpu_util), 2))
-    data_dict["memory"] = float(round(np.average(ram_usage), 2))
+    data_dict["cpu"] = float(round(stats["cpu"], 2)) if "cpu" in stats else ""
+    data_dict["memory"] = float(round(stats["memory"], 2)) if "memory" in stats else ""
     data_dict["power"] = ""
-    data_dict["temperature"] = "" if temp is None else float(temp)
+    data_dict["temperature"] = float(round(stats["temperature"], 2)) if "temperature" in stats else ""
     print(data_dict)
 
     # TODO: send data dict to db
 
     # TODO: send cpu_util(has percentage usage per core for the whole run)
+    print(stats["cpu_freq"])
 
     # TODO: send ram_usage(has ram usage in MB for the whole run)
     
@@ -141,7 +142,7 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "--model_path",
-        default="/mnt/workspace/CM/repos/local/cache/dc84a916f80f41d1/resnet50_v1",
+        default=None,
         type=str,
         help="model path"
     )

@@ -171,3 +171,12 @@ def get_psutil_stats(output_queue, stop_event):
         cpu_usage = sensors.handle_coral_dev_board_cpu_usage()
         ram_usage = sensors.handle_coral_dev_board_memory_usage()
         output_queue.put((cpu_usage, ram_usage))
+    
+
+def get_stats_rockpi(output_queue, stop_event):
+    while not stop_event.is_set():
+        cpu_freq = sensors.handle_firefly_rk3399_cpu_freq()
+        cpu_usage = sensors.get_cpu_usage()
+        ram_usage = sensors.get_memory_usage()[0]
+        temp = np.sum(sensors.handle_firefly_rk3399_temp())/2
+        output_queue.put((cpu_usage, ram_usage, temp/1000, cpu_freq))

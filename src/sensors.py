@@ -85,6 +85,14 @@ def handle_firefly_rk3399_temp():
     return [thermal_zone0, thermal_zone1]
 
 
+def get_cpu_usage():
+    return psutil.cpu_percent(interval=1, percpu=True)
+
+
+def get_memory_usage():
+    return [psutil.virtual_memory()[3] / (1024*1024)]
+
+
 def handle_coral_dev_board_cpu_usage():
     return psutil.cpu_percent(interval=1, percpu=True)
 

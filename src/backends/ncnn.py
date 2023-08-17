@@ -52,18 +52,25 @@ class NCNNBackend(Backend):
         self.stop_event = threading.Event()
         self.output_queue = Queue()
         self.psutil_thread = threading.Thread(
-            target=utils.get_psutil_stats, args=(self.output_queue, self.stop_event), daemon=True)
+            target=utils.get_stats_rockpi, args=(self.output_queue, self.stop_event), daemon=True)
         self.psutil_thread.start()
     
     def get_avg_stats(self):
-        ram_usage, cpu_util, gpu_util, temp = [], [], [], []
+        cpu_util, ram_usage, temp, cpu_freq = [], [], [], []
         
         while not self.output_queue.empty():
-            c,r = self.output_queue.get()
+            c, r, t, cf = self.output_queue.get()
             ram_usage.append(r)
             cpu_util.append(c)
-        ram_usage, cpu_util = np.array(ram_usage), np.array(cpu_util)
-        return ram_usage, cpu_util, None, None
+            temp.append(t)
+            cpu_freq.append(cf)
+        ram_usage, cpu_util, temp = np.array(ram_usage), np.array(cpu_util), np.array(temp)
+        stats = {}
+        stats["cpu"] = np.average(cpu_util)
+        stats["memory"] = np.average(ram_usage)
+        stats["temperature"] = np.average(temp)
+        stats["cpu_freq"] = cpu_freq
+        return stats
     
     def get_pred(self, outputs):
         return outputs.argmax()
@@ -72,8 +79,4 @@ class NCNNBackend(Backend):
         self.net.destroy()
         self.psutil_thread.join()
         del self.net
-        
-    
-
-
         
