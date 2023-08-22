@@ -11,20 +11,40 @@ def main(args):
     print(args)
     os.makedirs(args.preprocessed_dir, exist_ok=True)
 
+    backend = None
+    data = None
+    if args.backend == "tensorrt":
+        from backends.tensorrt import TRTBackend
+        precision = "fp16" if "fp16" in args.model_path else "fp32"
+        backend = TRTBackend(name="tensorrt", precision=precision)
+        data = np.ones((1 * 3 * 224 * 224), dtype=np.float32)
+    
+    if args.backend == "tflite":
+        from backends.tflite import TfliteBackend
+        backend = TfliteBackend(name="tflite")
+        data = np.ones((args.input_size[0], args.input_size[1], 3), dtype=np.float32)
+    
+    if args.backend == "ncnn":
+        from backends.ncnn import NCNNBackend
+        backend = NCNNBackend()
+        data = np.ones((1, 3, 224, 224), dtype=np.float32)
+    
     # preprocess and save np array
     jpeg_files_list = os.listdir(args.imagenet)
-    
-    for filename in tqdm(jpeg_files_list, desc="Preprocessing", unit="image"):
+
+    if args.backend == "tflite":
+        preprocess_func = backend.get_preprocess_func(args.model_name)
+    else:
+        preprocess_func = utils.preprocess_img
+
+    for filename in tqdm(jpeg_files_list[:args.count], desc="Preprocessing", unit="image"):
         if not filename.lower().endswith('.jpeg'):
             continue
         jpeg_path = os.path.join(args.imagenet, filename)
         npy_path = os.path.join(args.preprocessed_dir, filename.replace("JPEG", "npy"))
         if os.path.exists(npy_path):
             continue
-        if args.backend == "tflite":
-            preprocessed = utils.pre_process_tflite(jpeg_path)
-        else:
-            preprocessed = utils.preprocess_img(jpeg_path)
+        preprocessed = preprocess_func(jpeg_path, size=args.input_size)
         np.save(npy_path, preprocessed)
     
     # load val_map
@@ -37,23 +57,7 @@ def main(args):
     times = []
     accuracy = []
 
-    backend = None
-    data = None
-    if args.backend == "tensorrt":
-        from backends.tensorrt import TRTBackend
-        precision = "fp16" if "fp16" in args.model_path else "fp32"
-        backend = TRTBackend(name="tensorrt", precision=precision)
-        data = np.ones((1 * 3 * 224 * 224), dtype=np.float32)
     
-    if args.backend == "tflite":
-        from backends.tflite import TfliteBackend
-        backend = TfliteBackend(name="tflite")
-        data = np.ones((224, 224, 3), dtype=np.float32)
-    
-    if args.backend == "ncnn":
-        from backends.ncnn import NCNNBackend
-        backend = NCNNBackend()
-        data = np.ones((1, 3, 224, 224), dtype=np.float32)
 
     if backend is None:
         print("backend is none")
@@ -71,10 +75,8 @@ def main(args):
     print(f"start time---- {time.localtime()}")
     for npy_arr in tqdm(npy_arrays,  desc="Running inference"):
         inputs = np.load(os.path.join(args.preprocessed_dir, npy_arr))
-        start = time.time()
-        outputs = backend(inputs)
-        t = time.time() - start   
-        times.append(t)
+        outputs, infer_time = backend(inputs)
+        times.append(infer_time)
         pred = backend.get_pred(outputs)
         gt = labels[npy_arr.split('.')[0]]
         if pred==gt:
@@ -109,10 +111,12 @@ def main(args):
     print(data_dict)
 
     # TODO: send data dict to db
-    post(data_dict)
+
     # Write the dictionary to the JSON file
     import json
-    with open("/mnt/workspace/results.json", 'w') as json_file:
+    if not os.path.exists(os.path.join(args.results_dir, args.model_name)):
+        os.makedirs(os.path.join(args.results_dir, args.model_name), exist_ok=True)
+    with open(os.path.join(args.results_dir, args.model_name, "results.json"), 'w') as json_file:
         json.dump(data_dict, json_file)
 
     # TODO: send cpu_util(has percentage usage per core for the whole run)
@@ -121,7 +125,9 @@ def main(args):
     # TODO: send ram_usage(has ram usage in MB for the whole run)
 
 
-def post(data, url="http://transcription.kurg.org:27017/bench/insert"):
+def post(data, url=None):
+    if url is None:
+        return
     response = requests.post(url, json=data)
     print(response)
 
@@ -147,14 +153,14 @@ if __name__ == '__main__':
         help="backend name"
     )
     parser.add_argument(
-        "--model-name",
-        default="resnet50",
+        "--model_name",
+        default=None,
         type=str,
         help="model name"
     )
     parser.add_argument(
         "--model_path",
-        default="/mnt/workspace/resnet50-benchmark/resnet50_quant_full_edgetpu.tflite",
+        default=None,
         type=str,
         help="model path"
     )
@@ -162,6 +168,19 @@ if __name__ == '__main__':
         "--count",
         default=None,
         type=int,
+        help="no of images to run benchmark on"
+    )
+    parser.add_argument(
+        "--input_size",
+        type=lambda x: tuple(map(int, x.split(','))),
+        help="input size as values as 'x,y'",
+        default=(224, 224),
+        required=True
+    )
+    parser.add_argument(
+        "--results_dir",
+        default=None,
+        type=str,
         help="no of images to run benchmark on"
     )
     args = parser.parse_args()

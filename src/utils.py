@@ -50,7 +50,8 @@ def resize_with_aspectratio(img, out_height, out_width, scale=87.5, inter_pol=cv
     img = cv2.resize(img, (w, h), interpolation=inter_pol)
     return img
 
-def pre_process_tflite(img, dims=None, need_transpose=False):
+
+def preprocess_tflite_resnet(img, size=(224,224)):
     img = cv2.imread(img)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = resize_with_aspectratio(img, 224, 224, inter_pol=cv2.INTER_LINEAR)
@@ -61,7 +62,18 @@ def pre_process_tflite(img, dims=None, need_transpose=False):
     means = np.array([103.939, 116.779, 123.68], dtype=np.float32)
     img -= means
     return img
-    
+
+
+def preprocess_tflite_mobilenet(img, size=(224, 224)):
+    img = cv2.imread(img)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = resize_with_aspectratio(img, size[0], size[0], inter_pol=cv2.INTER_LINEAR)
+    img = center_crop(img, size[0], size[0])
+    img = np.asarray(img, dtype='float32')
+    img /= 127.5
+    img -= 1.0
+    return img
+
 
 def extract_tegrastats_info(output):
     # e.g. RAM 1542/1980MB

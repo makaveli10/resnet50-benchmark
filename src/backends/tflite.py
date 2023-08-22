@@ -1,5 +1,6 @@
 import numpy as np
 import threading
+import time
 from queue import Queue
 from pycoral.adapters import common, classify
 from pycoral.utils.edgetpu import make_interpreter
@@ -19,6 +20,17 @@ class TfliteBackend(Backend):
     def version(self):
         import tflite_runtime
         return tflite_runtime.__version__
+    
+    def get_preprocess_func(self, model_name):
+        model_names = ["resnet50", "mobilenet_v1", "mobilenet_v2", "mobilenet_v3", "inception_v1", "inception_v2", \
+            "inception_v3", "inception_v4", "efficientnet_s", "efficientnet_m", "efficientnet_l"]
+        if model_name not in model_names:
+            raise ValueError(f"Please provide a valid model name from {model_names}")
+        
+        if model_name == "resnet50":
+            return utils.preprocess_tflite_resnet
+        else:
+            return utils.preprocess_tflite_mobilenet
 
     def load_backend(self, model_path, model_name=None):
         self.model_name = model_name
@@ -35,9 +47,11 @@ class TfliteBackend(Backend):
         inputs = inputs / self.input_scale + self.input_zero_point
         inputs = inputs.astype(np.uint8)
         common.set_input(self.interpreter, inputs)
+        start = time.time()
         self.interpreter.invoke()
+        end = time.time()
         classes = classify.get_classes(self.interpreter, 1, 0.0)
-        return classes
+        return classes, end - start
     
     def warmup(self, inputs, warmup_steps=100):
         for step in range(warmup_steps):
@@ -72,7 +86,9 @@ class TfliteBackend(Backend):
         return stats
     
     def get_pred(self, outputs):
-        return outputs[0].id
+        if self.model_name == "resnet50":
+            return outputs[0].id
+        return outputs[0].id - 1
     
     def destroy(self):
         del self.interpreter
